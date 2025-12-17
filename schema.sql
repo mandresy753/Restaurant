@@ -1,8 +1,8 @@
-create type dish_type as enum ('START', 'MAIN', 'DESSERT')
+create type dish_type as enum ('START', 'MAIN', 'DESSERT');
 create table dish (
-                      id serial primary key,
-                      name varchar(255) not null,
-                      dish_type dish_type
+    id serial primary key,
+    name varchar(255) not null,
+    dish_type dish_type
 );
 
 create type category as enum ('VEGETABLE', 'ANIMAL', 'MARINE', 'DAIRY', 'OTHER');
