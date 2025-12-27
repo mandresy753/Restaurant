@@ -2,6 +2,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DataRetriever {
 
@@ -57,5 +59,40 @@ public class DataRetriever {
         } catch (SQLException e) {
             throw new RuntimeException("Erreur lors du findDishById", e);
         }
+    }
+
+    public List<Ingredient> findIngredients(int page, int size) {
+        String sql = """
+                select name, price
+                from ingredient
+                order by id
+                limit ? offset ?
+                """;
+        List<Ingredient> ingredients = new ArrayList<>();
+        int offset = (page - 1) * size;
+
+        try (Connection conn = new DBConnection().getDBConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, size);
+            ps.setInt(2, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Ingredient ing = new Ingredient(
+                            null,
+                            rs.getString("name"),
+                            rs.getDouble("price"),
+                            null,
+                            null
+                    );
+                    ingredients.add(ing);
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la récupération paginée des ingrédients", e);
+        }
+
+        return ingredients;
     }
 }
