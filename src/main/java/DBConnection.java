@@ -12,7 +12,7 @@ public class DBConnection {
 
     public Connection getDBConnection() {
         try {
-            Connection connection = DriverManager.getConnection(URL, USER, PASSWORD);
+            connection = DriverManager.getConnection(URL, USER, PASSWORD);
             return connection;
         } catch (SQLException e) {
             throw new RuntimeException("Erreur de connexion à la base de données", e);

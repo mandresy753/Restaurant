@@ -1,15 +1,17 @@
+import java.util.ArrayList;
 import java.util.List;
 
 public class Dish {
-    private Integer  id;
+    private Integer id;
     private String name;
     private DishTypeEnum dishType;
     private List<Ingredient> ingredients;
-    public Dish(Integer id, String name, DishTypeEnum dishType, List<Ingredient> ingredients) {
+
+    public Dish(Integer id, String name, DishTypeEnum dishType) {
         this.id = id;
         this.name = name;
         this.dishType = dishType;
-        this.ingredients = ingredients;
+        this.ingredients = new ArrayList<>(); // initialisation vide
     }
 
     public Integer getId() {
@@ -44,8 +46,10 @@ public class Dish {
         this.ingredients = ingredients;
     }
 
-    public double getDishPrice () {
-        return ingredients.stream().mapToDouble(ingredient -> ingredient.getPrice()).sum();
+    public double getDishPrice() {
+        return ingredients.stream()
+                .mapToDouble(Ingredient::getPrice)
+                .sum();
     }
 
     @Override
