@@ -13,6 +13,7 @@ public class Dish {
         this.dishType = dishType;
         this.ingredients = new ArrayList<>(); // initialisation vide
     }
+    public Dish(){}
 
     public Integer getId() {
         return id;

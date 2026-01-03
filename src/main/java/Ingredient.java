@@ -12,7 +12,14 @@ public class Ingredient {
         this.category = category;
         this.dish = dish;
     }
+    public Ingredient(String name, double price, CategoryEnum category, Dish dish) {
+        this.name = name;
+        this.price = price;
+        this.category = category;
+        this.dish = dish;
+    }
 
+    public Ingredient() {}
     public Integer getId() {
         return id;
     }
