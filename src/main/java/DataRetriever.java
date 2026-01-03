@@ -158,6 +158,120 @@ public class DataRetriever {
         return newIngredients;
     }
 
+    public Dish saveDish(Dish dishToSave) {
+        String insertDishSql = """
+        INSERT INTO dish (name, dish_type)
+        VALUES (?, ?::dish_type)
+        RETURNING id
+    """;
+
+        String updateDishSql = """
+        UPDATE dish SET name = ?, dish_type = ?::dish_type
+        WHERE id = ?
+    """;
+
+        try (Connection conn = new DBConnection().getDBConnection()) {
+            conn.setAutoCommit(false);
+
+            if (dishToSave.getId() == null) {
+                String checkSql = "SELECT id FROM dish WHERE name = ?";
+                try (PreparedStatement psCheck = conn.prepareStatement(checkSql)) {
+                    psCheck.setString(1, dishToSave.getName());
+                    try (ResultSet rs = psCheck.executeQuery()) {
+                        if (rs.next()) {
+                            dishToSave.setId(rs.getInt("id"));
+                        }
+                    }
+                }
+            }
+
+            if (dishToSave.getId() == null) {
+                try (PreparedStatement psInsert = conn.prepareStatement(insertDishSql)) {
+                    psInsert.setString(1, dishToSave.getName());
+                    psInsert.setObject(2, dishToSave.getDishType().name(), java.sql.Types.OTHER);
+                    try (ResultSet rs = psInsert.executeQuery()) {
+                        if (rs.next()) {
+                            dishToSave.setId(rs.getInt("id"));
+                        }
+                    }
+                }
+            } else {
+                try (PreparedStatement psUpdate = conn.prepareStatement(updateDishSql)) {
+                    psUpdate.setString(1, dishToSave.getName());
+                    psUpdate.setObject(2, dishToSave.getDishType().name(), java.sql.Types.OTHER);
+                    psUpdate.setInt(3, dishToSave.getId());
+                    psUpdate.executeUpdate();
+                }
+            }
+
+            Set<String> existingIngredientsNames = new HashSet<>();
+            List<Ingredient> updatedIngredients = new ArrayList<>();
+
+            String selectIng = "SELECT id, name, price, category FROM ingredient WHERE id_dish = ?";
+            try (PreparedStatement psSelect = conn.prepareStatement(selectIng)) {
+                psSelect.setInt(1, dishToSave.getId());
+                try (ResultSet rs = psSelect.executeQuery()) {
+                    while (rs.next()) {
+                        Ingredient ing = new Ingredient();
+                        ing.setId(rs.getInt("id"));
+                        ing.setName(rs.getString("name"));
+                        ing.setPrice(rs.getDouble("price"));
+                        String categoryStr = rs.getString("category");
+                        if (categoryStr != null) {
+                            ing.setCategory(CategoryEnum.valueOf(categoryStr));
+                        }
+                        ing.setDish(dishToSave);
+                        existingIngredientsNames.add(ing.getName());
+                        updatedIngredients.add(ing);
+                    }
+                }
+            }
+
+            String insertIng = """
+            INSERT INTO ingredient(name, price, category, id_dish)
+            VALUES (?, ?, ?, ?)
+        """;
+            try (PreparedStatement psInsertIng = conn.prepareStatement(insertIng)) {
+                for (Ingredient ing : dishToSave.getIngredients()) {
+                    if (!existingIngredientsNames.contains(ing.getName())) {
+                        psInsertIng.setString(1, ing.getName());
+                        psInsertIng.setDouble(2, ing.getPrice());
+                        psInsertIng.setObject(3, ing.getCategory().name(), java.sql.Types.OTHER);
+                        psInsertIng.setInt(4, dishToSave.getId());
+                        psInsertIng.addBatch();
+
+                        // Ajout dans la liste locale pour garder à jour
+                        ing.setDish(dishToSave);
+                        updatedIngredients.add(ing);
+                    }
+                }
+                psInsertIng.executeBatch();
+            }
+
+            String deleteIng = "DELETE FROM ingredient WHERE id_dish = ? AND name = ?";
+            try (PreparedStatement psDeleteIng = conn.prepareStatement(deleteIng)) {
+                for (Ingredient ing : updatedIngredients) {
+                    existingIngredientsNames.remove(ing.getName());
+                }
+                for (String toDelete : existingIngredientsNames) {
+                    psDeleteIng.setInt(1, dishToSave.getId());
+                    psDeleteIng.setString(2, toDelete);
+                    psDeleteIng.addBatch();
+                }
+                psDeleteIng.executeBatch();
+            }
+
+            dishToSave.setIngredients(updatedIngredients);
+
+            conn.commit();
+            return dishToSave;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la sauvegarde du plat", e);
+        }
+    }
+
+
 
 
 

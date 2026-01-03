@@ -36,6 +36,12 @@ public class Ingredient {
         return dish;
     }
 
+    public void setId(Integer id) {this.id = id;}
+    public void setName(String name) {this.name = name;}
+    public void setPrice(double price) {this.price = price;}
+    public void setCategory(CategoryEnum category) {this.category = category;}
+    public void setDish(Dish dish) {this.dish = dish;}
+
     @Override
     public String toString() {
         return "Ingredient{" +
