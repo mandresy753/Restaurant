@@ -240,7 +240,6 @@ public class DataRetriever {
                         psInsertIng.setInt(4, dishToSave.getId());
                         psInsertIng.addBatch();
 
-                        // Ajout dans la liste locale pour garder à jour
                         ing.setDish(dishToSave);
                         updatedIngredients.add(ing);
                     }
@@ -271,8 +270,31 @@ public class DataRetriever {
         }
     }
 
+    public List<Dish> findDishsByIngredientName(String IngredientName) {
+        String sql = """
+                select distinct dish.id, dish.name, dish_type from dish
+                inner join ingredient on dish.id = ingredient.id_dish
+                where ingredient.name ilike ?
+                """;
 
-
-
+        List<Dish> dishes = new ArrayList<>();
+        try (Connection conn = new DBConnection().getDBConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, "%" + IngredientName + "%");
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Dish dish = new Dish(
+                            rs.getInt("id"),
+                            rs.getString("name"),
+                            DishTypeEnum.valueOf(rs.getString("dish_type"))
+                    );
+                    dishes.add(dish);
+                }
+            }
+        }catch (SQLException e){
+            throw new RuntimeException("Erreur lors de la recherche des plats par ingrédient" , e);
+        }
+        return dishes;
+    }
 
 }
