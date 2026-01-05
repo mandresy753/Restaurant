@@ -297,4 +297,81 @@ public class DataRetriever {
         return dishes;
     }
 
+    public List<Ingredient> findIngredientsByCriteria(
+            String ingredientName,
+            CategoryEnum category,
+            String dishName,
+            int page,
+            int size
+    ) {
+        List<Ingredient> ingredients = new ArrayList<>();
+        int offset = (page - 1) * size;
+
+        StringBuilder sql = new StringBuilder("""
+            SELECT i.id, i.name, i.price, i.category, d.id as dish_id, d.name as dish_name, d.dish_type
+            FROM ingredient i
+            JOIN dish d ON i.id_dish = d.id
+            WHERE 1=1
+        """);
+
+        if (ingredientName != null && !ingredientName.isBlank()) {
+            sql.append(" AND i.name ILIKE ? ");
+        }
+
+        if (category != null) {
+            sql.append(" AND i.category = ?::category ");
+        }
+
+        if (dishName != null && !dishName.isBlank()) {
+            sql.append(" AND d.name ILIKE ? ");
+        }
+
+        sql.append(" ORDER BY i.id LIMIT ? OFFSET ?");
+
+        try (Connection conn = new DBConnection().getDBConnection();
+             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+
+            int index = 1;
+
+            if (ingredientName != null && !ingredientName.isBlank()) {
+                ps.setString(index++, "%" + ingredientName + "%");
+            }
+
+            if (category != null) {
+                ps.setObject(index++, category.name(), java.sql.Types.OTHER);
+            }
+
+            if (dishName != null && !dishName.isBlank()) {
+                ps.setString(index++, "%" + dishName + "%");
+            }
+
+            ps.setInt(index++, size);
+            ps.setInt(index, offset);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Dish dish = new Dish(
+                            rs.getInt("dish_id"),
+                            rs.getString("dish_name"),
+                            DishTypeEnum.valueOf(rs.getString("dish_type"))
+                    );
+
+                    Ingredient ing = new Ingredient(
+                            rs.getInt("id"),
+                            rs.getString("name"),
+                            rs.getDouble("price"),
+                            rs.getString("category") != null ? CategoryEnum.valueOf(rs.getString("category")) : null,
+                            dish
+                    );
+
+                    ingredients.add(ing);
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la recherche des ingrédients par critères", e);
+        }
+        return ingredients;
+    }
+
 }
