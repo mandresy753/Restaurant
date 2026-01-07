@@ -35,7 +35,7 @@ public class DataRetriever {
                                 DishTypeEnum.valueOf(rsDish.getString("dish_type"))
                         );
                     } else {
-                        return null;
+                        throw new RuntimeException("Plat introuvable pour l'id " + id);
                     }
                 }
             }
