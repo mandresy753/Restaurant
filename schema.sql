@@ -14,3 +14,6 @@ create table ingredient (
     id_dish int references dish(id)
 
 );
+
+ALTER TABLE Ingredient
+    ADD COLUMN IF NOT EXISTS required_quantity DECIMAL(10,2) NULL;
