@@ -49,9 +49,18 @@ public class Dish {
 
     public double getDishCost() {
         return ingredients.stream()
-                .mapToDouble(Ingredient::getPrice)
+                .mapToDouble(ing -> {
+                    if (ing.getRequiredQuantity() == null) {
+                        throw new RuntimeException(
+                                "Impossible de calculer le coût : quantité nécessaire inconnue pour l'ingrédient " + ing.getName()
+                        );
+                    }
+                    return ing.getPrice() * ing.getRequiredQuantity();
+                })
                 .sum();
     }
+
+
 
     @Override
     public String toString() {
@@ -60,6 +69,7 @@ public class Dish {
                 ", name='" + name + '\'' +
                 ", dishType=" + dishType +
                 ", ingredients=" + ingredients +
+                ", costs" + getDishCost() +
                 '}';
     }
 }

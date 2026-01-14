@@ -1,26 +1,21 @@
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.math.BigDecimal;
+import java.sql.*;
+import java.util.*;
 
 public class DataRetriever {
 
     public Dish findDishById(int id) {
         String dishSql = """
-            SELECT id, name, dish_type
-            FROM dish
-            WHERE id = ?
-        """;
+        SELECT id, name, dish_type
+        FROM dish
+        WHERE id = ?
+    """;
 
         String ingredientSql = """
-            SELECT name, price
-            FROM ingredient
-            WHERE id_dish = ?
-        """;
+        SELECT id, name, price, category, required_quantity
+        FROM ingredient
+        WHERE id_dish = ?
+    """;
 
         try (Connection conn = new DBConnection().getDBConnection()) {
 
@@ -44,12 +39,19 @@ public class DataRetriever {
                 psIng.setInt(1, id);
                 try (ResultSet rsIng = psIng.executeQuery()) {
                     while (rsIng.next()) {
+                        String categoryStr = rsIng.getString("category");
+                        CategoryEnum category = (categoryStr != null) ? CategoryEnum.valueOf(categoryStr) : null;
+
+                        BigDecimal rqBD = rsIng.getBigDecimal("required_quantity");
+                        Double requiredQuantity = (rqBD != null) ? rqBD.doubleValue() : null;
+
                         Ingredient ing = new Ingredient(
-                                null,
+                                rsIng.getInt("id"),
                                 rsIng.getString("name"),
                                 rsIng.getDouble("price"),
-                                null,
-                                null
+                                category,
+                                dish,
+                                requiredQuantity
                         );
                         dish.getIngredients().add(ing);
                     }
@@ -63,9 +65,10 @@ public class DataRetriever {
         }
     }
 
+
     public List<Ingredient> findIngredients(int page, int size) {
         String sql = """
-                select name, price
+                select name, price,
                 from ingredient
                 order by id
                 limit ? offset ?
@@ -85,7 +88,9 @@ public class DataRetriever {
                             rs.getString("name"),
                             rs.getDouble("price"),
                             null,
+                            null,
                             null
+
                     );
                     ingredients.add(ing);
                 }
@@ -100,8 +105,8 @@ public class DataRetriever {
 
     public List<Ingredient> createIngredients(List<Ingredient> newIngredients) {
         String sql = """
-        INSERT INTO ingredient(name, price, category, id_dish)
-        VALUES (?, ?, ?::category, ?)
+        INSERT INTO ingredient(name, price, category, id_dish,required_quantity)
+        VALUES (?, ?, ?::category, ?, ?)
     """;
 
         Set<String> names = new HashSet<>();
@@ -142,6 +147,12 @@ public class DataRetriever {
                     }
                     ps.setInt(4, ing.getDish().getId());
 
+                    if (ing.getRequiredQuantity() != null) {
+                        ps.setDouble(5, ing.getRequiredQuantity());
+                    } else {
+                        ps.setNull(5, java.sql.Types.NUMERIC);
+                    }
+
                     ps.executeUpdate();
                 }
 
@@ -159,36 +170,53 @@ public class DataRetriever {
     }
 
     public Dish saveDish(Dish dishToSave) {
+
         String insertDishSql = """
         INSERT INTO dish (name, dish_type)
-        VALUES (?, ?::dish_type)
+        VALUES (?, ?)
         RETURNING id
     """;
 
         String updateDishSql = """
-        UPDATE dish SET name = ?, dish_type = ?::dish_type
+        UPDATE dish
+        SET name = ?, dish_type = ?
         WHERE id = ?
+    """;
+
+        String selectIngredientsSql = """
+        SELECT id, name, price, category, required_quantity
+        FROM ingredient
+        WHERE id_dish = ?
+    """;
+
+        String insertIngredientSql = """
+        INSERT INTO ingredient (name, price, category, id_dish, required_quantity)
+        VALUES (?, ?, ?, ?, ?)
+    """;
+
+        String updateIngredientSql = """
+        UPDATE ingredient
+        SET price = ?, category = ?, required_quantity = ?
+        WHERE id = ?
+    """;
+
+        String deleteIngredientSql = """
+        DELETE FROM ingredient
+        WHERE id_dish = ? AND id = ?
     """;
 
         try (Connection conn = new DBConnection().getDBConnection()) {
             conn.setAutoCommit(false);
 
-            if (dishToSave.getId() == null) {
-                String checkSql = "SELECT id FROM dish WHERE name = ?";
-                try (PreparedStatement psCheck = conn.prepareStatement(checkSql)) {
-                    psCheck.setString(1, dishToSave.getName());
-                    try (ResultSet rs = psCheck.executeQuery()) {
-                        if (rs.next()) {
-                            dishToSave.setId(rs.getInt("id"));
-                        }
-                    }
-                }
-            }
+        /* =======================
+           1. CREATE / UPDATE DISH
+           ======================= */
 
             if (dishToSave.getId() == null) {
                 try (PreparedStatement psInsert = conn.prepareStatement(insertDishSql)) {
                     psInsert.setString(1, dishToSave.getName());
                     psInsert.setObject(2, dishToSave.getDishType().name(), java.sql.Types.OTHER);
+
                     try (ResultSet rs = psInsert.executeQuery()) {
                         if (rs.next()) {
                             dishToSave.setId(rs.getInt("id"));
@@ -204,63 +232,108 @@ public class DataRetriever {
                 }
             }
 
-            Set<String> existingIngredientsNames = new HashSet<>();
-            List<Ingredient> updatedIngredients = new ArrayList<>();
+        /* =======================
+           2. LOAD EXISTING INGREDIENTS
+           ======================= */
 
-            String selectIng = "SELECT id, name, price, category FROM ingredient WHERE id_dish = ?";
-            try (PreparedStatement psSelect = conn.prepareStatement(selectIng)) {
+            Map<Integer, Ingredient> existingIngredients = new HashMap<>();
+
+            try (PreparedStatement psSelect = conn.prepareStatement(selectIngredientsSql)) {
                 psSelect.setInt(1, dishToSave.getId());
+
                 try (ResultSet rs = psSelect.executeQuery()) {
                     while (rs.next()) {
                         Ingredient ing = new Ingredient();
                         ing.setId(rs.getInt("id"));
                         ing.setName(rs.getString("name"));
                         ing.setPrice(rs.getDouble("price"));
+
                         String categoryStr = rs.getString("category");
                         if (categoryStr != null) {
                             ing.setCategory(CategoryEnum.valueOf(categoryStr));
                         }
-                        ing.setDish(dishToSave);
-                        existingIngredientsNames.add(ing.getName());
-                        updatedIngredients.add(ing);
+
+                        BigDecimal rqBD = rs.getBigDecimal("required_quantity");
+                        ing.setRequiredQuantity(rqBD != null ? rqBD.doubleValue() : null);
+
+                        existingIngredients.put(ing.getId(), ing);
                     }
                 }
             }
 
-            String insertIng = """
-            INSERT INTO ingredient(name, price, category, id_dish)
-            VALUES (?, ?, ?, ?)
-        """;
-            try (PreparedStatement psInsertIng = conn.prepareStatement(insertIng)) {
+        /* =======================
+           3. INSERT / UPDATE INGREDIENTS
+           ======================= */
+
+            List<Ingredient> finalIngredients = new ArrayList<>();
+
+            try (
+                    PreparedStatement psInsertIng = conn.prepareStatement(insertIngredientSql, Statement.RETURN_GENERATED_KEYS);
+                    PreparedStatement psUpdateIng = conn.prepareStatement(updateIngredientSql)
+            ) {
                 for (Ingredient ing : dishToSave.getIngredients()) {
-                    if (!existingIngredientsNames.contains(ing.getName())) {
+
+                    if (ing.getId() != null && existingIngredients.containsKey(ing.getId())) {
+                        // UPDATE existant
+                        psUpdateIng.setDouble(1, ing.getPrice());
+                        psUpdateIng.setObject(
+                                2,
+                                ing.getCategory() != null ? ing.getCategory().name() : null,
+                                java.sql.Types.OTHER
+                        );
+
+                        if (ing.getRequiredQuantity() != null) {
+                            psUpdateIng.setDouble(3, ing.getRequiredQuantity());
+                        } else {
+                            psUpdateIng.setNull(3, java.sql.Types.NUMERIC);
+                        }
+
+                        psUpdateIng.setInt(4, ing.getId());
+                        psUpdateIng.addBatch();
+
+                        existingIngredients.remove(ing.getId());
+                    } else {
+                        // INSERT nouveau
                         psInsertIng.setString(1, ing.getName());
                         psInsertIng.setDouble(2, ing.getPrice());
-                        psInsertIng.setObject(3, ing.getCategory().name(), java.sql.Types.OTHER);
+                        psInsertIng.setObject(
+                                3,
+                                ing.getCategory() != null ? ing.getCategory().name() : null,
+                                java.sql.Types.OTHER
+                        );
                         psInsertIng.setInt(4, dishToSave.getId());
-                        psInsertIng.addBatch();
 
-                        ing.setDish(dishToSave);
-                        updatedIngredients.add(ing);
+                        if (ing.getRequiredQuantity() != null) {
+                            psInsertIng.setDouble(5, ing.getRequiredQuantity());
+                        } else {
+                            psInsertIng.setNull(5, java.sql.Types.NUMERIC);
+                        }
+
+                        psInsertIng.addBatch();
                     }
+
+                    ing.setDish(dishToSave);
+                    finalIngredients.add(ing);
                 }
+
+                psUpdateIng.executeBatch();
                 psInsertIng.executeBatch();
             }
 
-            String deleteIng = "DELETE FROM ingredient WHERE id_dish = ? AND name = ?";
-            try (PreparedStatement psDeleteIng = conn.prepareStatement(deleteIng)) {
-                for (Ingredient ing : updatedIngredients) {
-                    existingIngredientsNames.remove(ing.getName());
+        /* =======================
+           4. DELETE REMOVED INGREDIENTS
+           ======================= */
+
+            try (PreparedStatement psDelete = conn.prepareStatement(deleteIngredientSql)) {
+                for (Integer idToDelete : existingIngredients.keySet()) {
+                    psDelete.setInt(1, dishToSave.getId());
+                    psDelete.setInt(2, idToDelete);
+                    psDelete.addBatch();
                 }
-                for (String toDelete : existingIngredientsNames) {
-                    psDeleteIng.setInt(1, dishToSave.getId());
-                    psDeleteIng.setString(2, toDelete);
-                    psDeleteIng.addBatch();
-                }
-                psDeleteIng.executeBatch();
+                psDelete.executeBatch();
             }
 
-            dishToSave.setIngredients(updatedIngredients);
+            dishToSave.setIngredients(finalIngredients);
 
             conn.commit();
             return dishToSave;
@@ -269,6 +342,7 @@ public class DataRetriever {
             throw new RuntimeException("Erreur lors de la sauvegarde du plat", e);
         }
     }
+
 
     public List<Dish> findDishsByIngredientName(String IngredientName) {
         String sql = """
@@ -302,7 +376,8 @@ public class DataRetriever {
             CategoryEnum category,
             String dishName,
             int page,
-            int size
+            int size,
+            Double requiredQuantity
     ) {
         List<Ingredient> ingredients = new ArrayList<>();
         int offset = (page - 1) * size;
@@ -325,8 +400,12 @@ public class DataRetriever {
         if (dishName != null && !dishName.isBlank()) {
             sql.append(" AND d.name ILIKE ? ");
         }
+        if (requiredQuantity != null) {
+            sql.append(" AND required_quantity = ? ");
+        }
 
         sql.append(" ORDER BY i.id LIMIT ? OFFSET ?");
+
 
         try (Connection conn = new DBConnection().getDBConnection();
              PreparedStatement ps = conn.prepareStatement(sql.toString())) {
@@ -356,12 +435,18 @@ public class DataRetriever {
                             DishTypeEnum.valueOf(rs.getString("dish_type"))
                     );
 
+                    String categoryStr = rs.getString("category");
+                    CategoryEnum cat = categoryStr != null ? CategoryEnum.valueOf(categoryStr) : null;
+
+                    Double rQ = rs.getObject("required_quantity", Double.class);
+
                     Ingredient ing = new Ingredient(
                             rs.getInt("id"),
                             rs.getString("name"),
                             rs.getDouble("price"),
-                            rs.getString("category") != null ? CategoryEnum.valueOf(rs.getString("category")) : null,
-                            dish
+                            cat,
+                            dish,
+                            rQ
                     );
 
                     ingredients.add(ing);
