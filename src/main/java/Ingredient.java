@@ -1,5 +1,7 @@
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Ingredient {
     private Integer id;
@@ -9,12 +11,10 @@ public class Ingredient {
     private Dish dish;
     private BigDecimal requiredQuantity;
     private UnitType unit;
-    public StockValue getStockValueAt(Instant time){
-        return null;
-    }
+    private List<StockMovement> stockMovementList;
 
-
-    public Ingredient(Integer id, String name, BigDecimal price, CategoryEnum category, Dish dish, BigDecimal requiredQuantity, UnitType unit) {
+    public Ingredient(Integer id, String name, BigDecimal price, CategoryEnum category,
+                      Dish dish, BigDecimal requiredQuantity, UnitType unit) {
         this.id = id;
         this.name = name;
         this.price = price;
@@ -22,9 +22,12 @@ public class Ingredient {
         this.dish = dish;
         this.requiredQuantity = requiredQuantity;
         this.unit = unit;
+        this.stockMovementList = new ArrayList<>();
     }
 
-    public Ingredient() {}
+    public Ingredient() {
+        this.stockMovementList = new ArrayList<>();
+    }
 
     public Integer getId() {
         return id;
@@ -52,6 +55,10 @@ public class Ingredient {
 
     public UnitType getUnit() {
         return unit;
+    }
+
+    public List<StockMovement> getStockMovementList() {
+        return stockMovementList;
     }
 
     public void setId(Integer id) {
@@ -82,6 +89,33 @@ public class Ingredient {
         this.unit = unit;
     }
 
+    public void setStockMovementList(List<StockMovement> stockMovementList) {
+        this.stockMovementList = stockMovementList;
+    }
+
+    public void addStockMovement(StockMovement sm) {
+        if (this.stockMovementList == null) {
+            this.stockMovementList = new ArrayList<>();
+        }
+        this.stockMovementList.add(sm);
+    }
+
+    public StockValue getStockValueAt(Instant instant) {
+        double quantity = 0.0;
+
+        for (StockMovement sm : stockMovementList) {
+            if (!sm.getCreationDateTime().isAfter(instant)) {
+                if (sm.getType() == MovementType.IN) {
+                    quantity += sm.getValue().getQuantity();
+                } else if (sm.getType() == MovementType.OUT) {
+                    quantity -= sm.getValue().getQuantity();
+                }
+            }
+        }
+
+        return new StockValue(quantity, UnitType.KG);
+    }
+
     @Override
     public String toString() {
         return "Ingredient{" +
@@ -92,6 +126,7 @@ public class Ingredient {
                 ", dish=" + (dish != null ? dish.getName() : null) +
                 ", requiredQuantity=" + requiredQuantity +
                 ", unit=" + unit +
+                ", stockMovementList=" + stockMovementList +
                 '}';
     }
 }

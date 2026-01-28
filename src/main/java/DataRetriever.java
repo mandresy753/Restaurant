@@ -690,4 +690,85 @@ public class DataRetriever {
         }
         return null;
     }
+
+    public Ingredient saveIngredient(Ingredient toSave) {
+        String insertIngredientSql = """
+            INSERT INTO ingredient(name, price, category)
+            VALUES (?, ?, ?::category) on conflict(id)  do update 
+                set name = excluded.name,
+                category = excluded.category,
+                price = excluded.price
+            RETURNING id
+        """;
+
+        String updateIngredientSql = """
+            UPDATE ingredient
+            SET name = ?, price = ?, category = ?::category
+            WHERE id = ?
+        """;
+
+        String insertStockMovementSql = """
+            INSERT INTO stock_movement(id_ingredient, quantity, type, unit, creation_datetime)
+            VALUES (?, ?, ?::movement_type, ?::unit_type, ?)
+            ON CONFLICT (id) DO NOTHING
+            RETURNING id
+        """;
+
+        try (Connection conn = new DBConnection().getDBConnection()) {
+            conn.setAutoCommit(false);
+
+            // 1️⃣ Sauvegarde ou mise à jour de l'ingrédient
+            if (toSave.getId() == null) {
+                try (PreparedStatement ps = conn.prepareStatement(insertIngredientSql)) {
+                    ps.setString(1, toSave.getName());
+                    ps.setBigDecimal(2, toSave.getPrice());
+                    ps.setObject(3, toSave.getCategory() != null ?
+                            toSave.getCategory().name() : null, Types.OTHER);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            toSave.setId(rs.getInt(1));
+                        }
+                    }
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateIngredientSql)) {
+                    ps.setString(1, toSave.getName());
+                    ps.setBigDecimal(2, toSave.getPrice());
+                    ps.setObject(3, toSave.getCategory() != null ?
+                            toSave.getCategory().name() : null, Types.OTHER);
+                    ps.setInt(4, toSave.getId());
+                    ps.executeUpdate();
+                }
+            }
+
+            // 2️⃣ Sauvegarde des mouvements de stock
+            if (toSave.getStockMovementList() != null) {
+                for (StockMovement sm : toSave.getStockMovementList()) {
+                    try (PreparedStatement ps = conn.prepareStatement(insertStockMovementSql)) {
+                        ps.setInt(1, toSave.getId());
+                        ps.setDouble(2, sm.getValue().getQuantity());
+                        ps.setString(3, sm.getType().name());
+                        ps.setString(4, sm.getValue().getUnit().name());
+                        ps.setTimestamp(5, Timestamp.from(sm.getCreationDateTime()));
+
+                        try (ResultSet rs = ps.executeQuery()) {
+                            if (rs.next()) {
+                                sm.setId(rs.getInt(1)); // récupère l'id si insertion effectuée
+                            }
+                        }
+                    }
+                }
+            }
+
+            conn.commit();
+            return toSave;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la sauvegarde de l'ingrédient", e);
+        }
+    }
+    private void insertIngredientStockMovements(Connection conn, Ingredient ingredient) {
+
+    }
 }

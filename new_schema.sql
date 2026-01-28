@@ -42,3 +42,18 @@ GRANT USAGE, SELECT, UPDATE ON SEQUENCE dish_id_seq TO mini_dish_db_manager;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE dish_ingredient_id_seq TO mini_dish_db_manager;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE ingredient_id_seq TO mini_dish_db_manager;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE stock_movement_id_seq TO mini_dish_db_manager;
+
+
+INSERT INTO stock_movement VALUES
+                               (1, 1, 5.0, 'IN', 'KG', '2024-01-05 08:00'),
+                               (2, 1, 0.2, 'OUT', 'KG', '2024-01-06 12:00'),
+                               (3, 2, 4.0, 'IN', 'KG', '2024-01-05 08:00'),
+                               (4, 2, 0.15, 'OUT', 'KG', '2024-01-06 12:00'),
+                               (5, 3, 10.0, 'IN', 'KG', '2024-01-04 09:00'),
+                               (6, 3, 1.0, 'OUT', 'KG', '2024-01-06 13:00'),
+                               (7, 4, 3.0, 'IN', 'KG', '2024-01-05 10:00'),
+                               (8, 4, 0.3, 'OUT', 'KG', '2024-01-06 14:00'),
+                               (9, 5, 2.5, 'IN', 'KG', '2024-01-05 10:00'),
+                               (10, 5, 0.2, 'OUT', 'KG', '2024-01-06 14:00');
+
+
