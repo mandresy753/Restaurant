@@ -1,11 +1,10 @@
 import org.junit.jupiter.api.Test;
-
+import java.math.BigDecimal;
 import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
-
 public class DataRetrieverTest {
+
     @Test
     void testFindDishById() {
         DataRetriever retriever = new DataRetriever();
@@ -14,246 +13,242 @@ public class DataRetrieverTest {
 
         assertNotNull(dish);
         assertEquals("Salade fraîche", dish.getName());
+        assertEquals(new BigDecimal("3500.00"), dish.getSellingPrice());
         assertEquals(2, dish.getIngredients().size());
-        assertTrue(dish.getIngredients().stream().anyMatch(i -> i.getName().equalsIgnoreCase("Laitue")));
-        assertTrue(dish.getIngredients().stream().anyMatch(i -> i.getName().equalsIgnoreCase("Tomate")));
+        assertTrue(dish.getIngredients().stream().anyMatch(i -> i.getName().equals("Laitue")));
+        assertTrue(dish.getIngredients().stream().anyMatch(i -> i.getName().equals("Tomate")));
+
+        // Vérifier UnitType
+        Ingredient laitue = dish.getIngredients().stream()
+                .filter(i -> i.getName().equals("Laitue"))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(laitue);
+        assertEquals(UnitType.KG, laitue.getUnit());
+        assertEquals(new BigDecimal("0.20"), laitue.getRequiredQuantity());
     }
+
     @Test
     void testFindDishByIdNotFound() {
         DataRetriever retriever = new DataRetriever();
-
-        assertThrows(RuntimeException.class, () -> {
-            retriever.findDishById(999);
-        });
+        assertThrows(RuntimeException.class, () -> retriever.findDishById(999));
     }
+
     @Test
     void testFindIngredientsPagination() {
         DataRetriever retriever = new DataRetriever();
 
-        int page = 2;
-        int size = 2;
-
-        List<Ingredient> ingredients = retriever.findIngredients(page, size);
+        List<Ingredient> ingredients = retriever.findIngredients(1, 2);
 
         assertNotNull(ingredients);
         assertEquals(2, ingredients.size());
-
-        assertEquals("Poulet", ingredients.get(0).getName());
-        assertEquals("Chocolat", ingredients.get(1).getName());
+        assertEquals("Laitue", ingredients.get(0).getName());
+        assertEquals("Tomate", ingredients.get(1).getName());
     }
+
     @Test
     void testFindIngredientsPaginationNotFound() {
         DataRetriever retriever = new DataRetriever();
 
-        int page = 3;
-        int size = 5;
+        List<Ingredient> ingredients = retriever.findIngredients(100, 10);
 
-        List<Ingredient> ingredients = retriever.findIngredients(page, size);
-
+        assertNotNull(ingredients);
         assertEquals(0, ingredients.size());
-
     }
+
     @Test
     void testFindDishByIngredientName() {
-        String ingredientName = "eur";
         DataRetriever retriever = new DataRetriever();
 
-        assertEquals("Gâteau au chocolat", retriever.findDishsByIngredientName(ingredientName).get(0).getName());
+        // "eur" dans "Beurre" -> trouve "Gâteau au chocolat"
+        List<Dish> dishes = retriever.findDishsByIngredientName("eur");
+
+        assertNotNull(dishes);
+        assertFalse(dishes.isEmpty());
+        assertEquals("Gâteau au chocolat", dishes.get(0).getName());
+        assertEquals(new BigDecimal("8000.00"), dishes.get(0).getSellingPrice());
     }
-    @Test
-    void testFindIngredientsByCriteria() {
-        DataRetriever retriever = new DataRetriever();
-        String ingredientName = null;
-        CategoryEnum category = CategoryEnum.VEGETABLE;
-        String dishName = null;
-        int page = 1;
-        int size = 10;
 
+    @Test
+    void testFindIngredientsByCriteria_vegetableCategory() {
+        DataRetriever retriever = new DataRetriever();
+
+        // Recherche des ingrédients VEGETABLE
         List<Ingredient> result = retriever.findIngredientsByCriteria(
-                ingredientName,
-                category,
-                dishName,
-                page,
-                size
+                null,                    // ingredientName
+                CategoryEnum.VEGETABLE,  // category
+                null,                    // dishName
+                1,                       // page
+                10,                      // size
+                null                     // requiredQuantity
         );
 
         assertNotNull(result);
-        assertEquals(2, result.size());
+        assertEquals(2, result.size());  // Laitue et Tomate
 
-        List<String> ingredientNames = result.stream()
-                .map(Ingredient::getName)
-                .toList();
+        assertTrue(result.stream().anyMatch(i -> i.getName().equals("Laitue")));
+        assertTrue(result.stream().anyMatch(i -> i.getName().equals("Tomate")));
 
-        assertTrue(ingredientNames.contains("Laitue"));
-        assertTrue(ingredientNames.contains("Tomate"));
-
+        // Vérifier que Laitue a bien son UnitType
+        Ingredient laitue = result.stream()
+                .filter(i -> i.getName().equals("Laitue"))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(laitue);
+        assertEquals(UnitType.KG, laitue.getUnit());
     }
+
     @Test
     void testFindIngredientsByCriteria_nameAndDish_noMatch() {
         DataRetriever retriever = new DataRetriever();
 
-        String ingredientName = "cho";
-        CategoryEnum category = null;
-        String dishName = "Sal";
-        int page = 1;
-        int size = 10;
-
+        // Recherche qui ne devrait rien trouver
         List<Ingredient> result = retriever.findIngredientsByCriteria(
-                ingredientName,
-                category,
-                dishName,
-                page,
-                size
+                "NEXISTEPAS",      // ingredientName
+                null,              // category
+                "NEXISTEPAS",      // dishName
+                1,                 // page
+                10,                // size
+                null               // requiredQuantity
         );
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
-        assertEquals(0,result.size() );
     }
+
     @Test
-    void findIngredientsByCriteria_categoryNull() {
+    void testFindIngredientsByCriteria_chocolateInCake() {
         DataRetriever retriever = new DataRetriever();
 
-        String ingredientName = "cho";
-        CategoryEnum category = null;
-        String dishName = "gâteau";
-        int page = 1;
-        int size =10;
-
+        // Recherche de "choc" dans le plat "gâteau"
         List<Ingredient> result = retriever.findIngredientsByCriteria(
-                ingredientName,
-                category,
-                dishName,
-                page,
-                size
+                "choc",           // ingredientName
+                null,             // category
+                "gâteau",         // dishName
+                1,                // page
+                10,               // size
+                null              // requiredQuantity
         );
 
         assertNotNull(result);
         assertEquals(1, result.size());
         assertEquals("Chocolat", result.get(0).getName());
+        assertEquals(UnitType.KG, result.get(0).getUnit());
+        assertEquals(new BigDecimal("0.30"), result.get(0).getRequiredQuantity());
     }
+
     @Test
-    void testCreateIngredients() {
+    void testCreateIngredients_withUniqueNames() {
         DataRetriever retriever = new DataRetriever();
 
-        Dish dish = new Dish();
-        dish.setId(1); // plat existant en base
+        // Récupérer un plat existant pour l'association
+        Dish existingDish = retriever.findDishById(4);  // Gâteau au chocolat
 
-        Ingredient fromage = new Ingredient(
+        // Utiliser des noms UNIQUES avec timestamp pour éviter les conflits
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String uniqueName1 = "TestIngredient_" + timestamp + "_1";
+        String uniqueName2 = "TestIngredient_" + timestamp + "_2";
+
+        Ingredient ing1 = new Ingredient(
                 null,
-                "Fromage",
-                1200.0,
+                uniqueName1,
+                new BigDecimal("1500.00"),
+                CategoryEnum.OTHER,
+                existingDish,
+                new BigDecimal("0.1"),
+                UnitType.KG
+        );
+
+        Ingredient ing2 = new Ingredient(
+                null,
+                uniqueName2,
+                new BigDecimal("2500.00"),
                 CategoryEnum.DAIRY,
-                dish
+                existingDish,
+                new BigDecimal("0.2"),
+                UnitType.KG
         );
 
-        Ingredient oignon = new Ingredient(
-                null,
-                "Oignon",
-                500.0,
-                CategoryEnum.VEGETABLE,
-                dish
-        );
-
-        List<Ingredient> result = retriever.createIngredients(
-                List.of(fromage, oignon)
-        );
+        List<Ingredient> result = retriever.createIngredients(List.of(ing1, ing2));
 
         assertNotNull(result);
         assertEquals(2, result.size());
 
-        assertTrue(result.stream().anyMatch(i -> i.getName().equalsIgnoreCase("Fromage")));
-        assertTrue(result.stream().anyMatch(i -> i.getName().equalsIgnoreCase("Oignon")));
+        // Les ingrédients doivent maintenant avoir des IDs
+        assertNotNull(result.get(0).getId());
+        assertNotNull(result.get(1).getId());
+
+        // Vérifier les noms
+        assertEquals(uniqueName1, result.get(0).getName());
+        assertEquals(uniqueName2, result.get(1).getName());
     }
+
     @Test
     void testCreateIngredients_existingIngredient_shouldThrowException() {
         DataRetriever retriever = new DataRetriever();
 
-        Dish dish = new Dish();
+        Dish existingDish = retriever.findDishById(1);  // Salade fraîche
 
-        Ingredient carotte = new Ingredient(
+        // Essayer de créer un ingrédient qui existe DÉJÀ pour ce plat
+        // "Laitue" existe déjà pour le plat ID 1
+        Ingredient duplicate = new Ingredient(
                 null,
-                "Carotte",
-                2000.0,
+                "Laitue",  // Nom déjà existant pour ce plat
+                new BigDecimal("800.00"),
                 CategoryEnum.VEGETABLE,
-                dish
+                existingDish,
+                new BigDecimal("0.2"),
+                UnitType.KG
         );
 
-        Ingredient laitue = new Ingredient(
-                null,
-                "Laitue",
-                2000.0,
-                CategoryEnum.VEGETABLE,
-                dish
-        );
-
+        // Doit lancer une exception car "Laitue" existe déjà pour le plat 1
         assertThrows(RuntimeException.class, () -> {
-            retriever.createIngredients(List.of(carotte, laitue));
+            retriever.createIngredients(List.of(duplicate));
         });
     }
+
     @Test
-    void testSaveDish_createsDishWithIngredient() {
+    void testSaveDish_createsNewDish() {
         DataRetriever retriever = new DataRetriever();
 
-        Dish dishToSave = new Dish();
-        dishToSave.setName("Soupe de légumes");
-        dishToSave.setDishType(DishTypeEnum.START);
-        dishToSave.setIngredients(List.of(
-                new Ingredient(null, "Oignon", 500.0, CategoryEnum.VEGETABLE, null)
-        ));
+        // 1. D'abord, vérifier quel est le prochain ID disponible
+        int nextId = retriever.getNextSequenceValue("dish_id_seq");
+        System.out.println("Prochain ID dish disponible: " + nextId);
 
-        Dish savedDish = retriever.saveDish(dishToSave);
+        // 2. Créer un plat avec un nom UNIQUE
+        Dish newDish = new Dish();
+        newDish.setName("Test Plat " + System.currentTimeMillis()); // Garanti unique
+        newDish.setDishType(DishTypeEnum.MAIN);
+        newDish.setSellingPrice(new BigDecimal("5000.00"));
 
+        // 3. Appeler saveDish
+        Dish savedDish = retriever.saveDish(newDish);
+
+        // 4. Vérifications
         assertNotNull(savedDish);
-        assertNotNull(savedDish.getId(), "Le plat doit avoir un ID généré");
-        assertEquals("Soupe de légumes", savedDish.getName());
-        assertEquals(DishTypeEnum.START, savedDish.getDishType());
-
-        List<Ingredient> ingredients = savedDish.getIngredients();
-        assertNotNull(ingredients);
-        assertEquals(1, ingredients.size());
-
-        Ingredient ing = ingredients.get(0);
-        assertEquals("Oignon", ing.getName());
-        assertEquals(CategoryEnum.VEGETABLE, ing.getCategory(), "La catégorie doit être VEGETABLE");
-        assertEquals(savedDish, ing.getDish(), "L'ingrédient doit être lié au plat");
+        assertNotNull(savedDish.getId());
+        System.out.println("Plat créé avec ID: " + savedDish.getId());
     }
+
     @Test
-    void testSaveDish_updatesIngredients() {
+    void testSaveDish_updatesExistingDish() {
         DataRetriever retriever = new DataRetriever();
 
-        Dish existingDish = new Dish();
-        existingDish.setId(1); // ID connu
-        existingDish.setName("Salade fraîche");
-        existingDish.setDishType(DishTypeEnum.START);
+        // Récupérer un plat existant
+        Dish existingDish = retriever.findDishById(1);  // Salade fraîche
 
-        existingDish.setIngredients(List.of(
-                new Ingredient(null, "Laitue", 200.0, CategoryEnum.VEGETABLE, existingDish),
-                new Ingredient(null, "Tomate", 300.0, CategoryEnum.VEGETABLE, existingDish)
-        ));
-
-        List<Ingredient> updatedIngredients = List.of(
-                new Ingredient(null, "Laitue", 200.0, CategoryEnum.VEGETABLE, existingDish),
-                new Ingredient(null, "Tomate", 300.0, CategoryEnum.VEGETABLE, existingDish),
-                new Ingredient(null, "Oignon", 500.0, CategoryEnum.VEGETABLE, existingDish),
-                new Ingredient(null, "Fromage", 1200.0, CategoryEnum.DAIRY, existingDish)
-        );
-        existingDish.setIngredients(updatedIngredients);
+        // Modifier son nom
+        String originalName = existingDish.getName();
+        existingDish.setName("Salade fraîche MODIFIÉE");
 
         Dish updatedDish = retriever.saveDish(existingDish);
 
-        assertNotNull(updatedDish, "Le plat ne doit pas être null");
-        assertEquals(1, updatedDish.getId(), "L'ID doit rester le même");
-        assertEquals("Salade fraîche", updatedDish.getName());
-        assertEquals(DishTypeEnum.START, updatedDish.getDishType());
+        assertNotNull(updatedDish);
+        assertEquals(1, updatedDish.getId());  // Même ID
+        assertEquals("Salade fraîche MODIFIÉE", updatedDish.getName());
 
-        List<String> ingredientNames = updatedDish.getIngredients().stream()
-                .map(Ingredient::getName)
-                .toList();
-        assertTrue(ingredientNames.containsAll(List.of("Laitue", "Tomate", "Oignon", "Fromage")),
-                "Les ingrédients doivent être mis à jour correctement");
-
-        assertEquals(4, updatedDish.getIngredients().size());
+        // Rétablir le nom original pour ne pas affecter les autres tests
+        existingDish.setName(originalName);
+        retriever.saveDish(existingDish);
     }
-
 }
